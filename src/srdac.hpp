@@ -11,8 +11,9 @@ namespace srdac
 	void initDac(std::int8_t input, std::int8_t clk, std::int8_t rclk);
 	void write(std::uint16_t value);
 
-	constexpr std::uint16_t numWholeSteps = 98;
-	constexpr std::uint16_t stepSize      = 65535 / numWholeSteps;
+	constexpr std::uint16_t numWholeSteps = 96;
+	constexpr std::uint16_t dacMaxStep    = 65535;
+	constexpr std::uint16_t stepSize      = dacMaxStep / numWholeSteps;
 	constexpr std::uint16_t maxStep       = stepSize * numWholeSteps;
 
 	constexpr std::uint16_t noteToVal(std::uint8_t note)

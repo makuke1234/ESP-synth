@@ -118,7 +118,8 @@ void dispout(std::uint8_t note, std::int16_t bend, std::uint8_t mod)
 	lcd.setCursor(0, 1);
 	lcd.write(str);
 	
-	sprintf(str, "%cBend: %.2f ", disp::selchar[(disp::selidx == 1) | (disp::isSelected << 1)], float(bend) * (2.f * (1.f / 8192.f)));
+	const auto bendvalue = float(bend) * (2.f * (1.f / 8192.f));
+	sprintf(str, "%cBend: %c%.2f ", disp::selchar[(disp::selidx == 1) | (disp::isSelected << 1)], bendvalue < 0.0f ? '-' : '+', fabsf(bendvalue));
 	lcd.setCursor(0, 2);
 	lcd.write(str);
 	
@@ -246,7 +247,7 @@ std::uint16_t duty = 0;
 
 unsigned long zerotimertime = 0;
 bool iszerotimer = false;
-constexpr unsigned long zerotimerBomb = 1000;
+constexpr unsigned long zerotimerBomb = 1500;
 
 void setzerotimer()
 {
@@ -268,6 +269,7 @@ void loop()
 		{
 			disp::lastbend = 0;
 			disp::lastmod  = 0;
+			srdac::write(srdac::noteToVal(disp::lastnote, disp::lastbend));
 			dispout(disp::lastnote, disp::lastbend, disp::lastmod);
 			iszerotimer = false;
 		}
