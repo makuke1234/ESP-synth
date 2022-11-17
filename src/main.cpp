@@ -263,7 +263,7 @@ constexpr T clamp(T value, T min, T max)
 
 void loop()
 {
-	while (1)
+	/*while (1)
 	{
 		if (iszerotimer && (millis() > zerotimertime))
 		{
@@ -354,6 +354,18 @@ void loop()
 					Serial.printf("Duty cycle: %hu\n", duty);
 				}
 			}
+		}
+	}*/
+	while (1)
+	{
+		constexpr std::int32_t step = 100, maxstep = srdac::maxStep;
+		for (std::int32_t i = 0; i < maxstep; i += step)
+		{
+			srdac::write(i);
+		}
+		for (std::int32_t i = maxstep; i > 0; i -= step)
+		{
+			srdac::write(i);
 		}
 	}
 }
