@@ -24,7 +24,7 @@ namespace srdac
 	{
 		return std::uint16_t(
 			std::int16_t(noteToVal(note)) +
-			std::int16_t((std::int32_t(pitch) * std::int32_t(stepSize)) / 8192)
+			std::int16_t((std::int32_t(pitch) * std::int32_t(stepSize)) / 4096)
 		);
 	}
 }
