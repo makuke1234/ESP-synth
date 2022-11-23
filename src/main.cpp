@@ -16,7 +16,10 @@
 #define ENC_2   12
 #define ENC_BTN 13
 
-#define PWM_OUT 18
+#define PWM1_OUT 33
+#define PWM2_OUT 34
+#define PWM3_OUT 35
+#define PWM4_OUT 36
 
 #define SR_SER  16
 #define SR_CLK  15
@@ -200,6 +203,7 @@ void midicallback(midi::Event event, std::int16_t data)
 	case midi::Event::ControlModulation:
 		mod = std::uint8_t(data);
 		Serial.printf("Modulation value: %hd\n", mod);
+		ledcWrite(0, 511U - std::uint32_t(mod) * 4U);
 		dispout(notes.empty() ? 0 : notes.back(), pitchbend, mod);
 		break;
 	}
@@ -217,9 +221,18 @@ void setup()
 	attachInterrupt(ENC_BTN, &encoderBtnISR, CHANGE);
 
 	// Initialize PWM
-	ledcAttachPin(PWM_OUT, 0);
+	ledcAttachPin(PWM1_OUT, 0);
 	ledcSetup(0, 78000, 9);
-	ledcWrite(0, 0);
+	ledcWrite(0, 511);
+	ledcAttachPin(PWM2_OUT, 1);
+	ledcSetup(1, 78000, 9);
+	ledcWrite(1, 511);
+	ledcAttachPin(PWM3_OUT, 2);
+	ledcSetup(2, 78000, 9);
+	ledcWrite(2, 511);
+	ledcAttachPin(PWM4_OUT, 3);
+	ledcSetup(3, 78000, 9);
+	ledcWrite(3, 511);
 
 	srdac::initDac(SR_SER, SR_CLK, SR_RCLK);
 
