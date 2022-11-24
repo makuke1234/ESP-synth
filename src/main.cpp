@@ -106,6 +106,7 @@ namespace disp
 	std::uint8_t lastnote;
 	std::int16_t lastbend;
 	std::uint8_t lastmod, lastbr, lastfoot, lastport;
+	volatile bool packetincoming = false;
 }
 
 void dispout(
@@ -132,11 +133,11 @@ void dispout(
 	lcd.setCursor(0, 1);
 	lcd.write(str);
 	
-	sprintf(str, "%cMod:  %3hu", disp::selchar[(disp::selidx == 2) | (disp::isSelected << 1)], std::uint16_t(mod));
+	sprintf(str, "%cMOD:%3hu", disp::selchar[(disp::selidx == 2) | (disp::isSelected << 1)], std::uint16_t(mod));
 	lcd.setCursor(0, 2);
 	lcd.write(str);
 
-	sprintf(str, "%cVCF:  %3hu", disp::selchar[(disp::selidx == 3) | (disp::isSelected << 1)], std::uint16_t(breath));
+	sprintf(str, "%cVCF:%3hu", disp::selchar[(disp::selidx == 3) | (disp::isSelected << 1)], std::uint16_t(breath));
 	lcd.setCursor(0, 3);
 	lcd.write(str);
 
@@ -147,6 +148,21 @@ void dispout(
 	sprintf(str, "%cLFO2:%3hu", disp::selchar[(disp::selidx == 5) | (disp::isSelected << 1)], std::uint16_t(portamento));
 	lcd.setCursor(LCD_X / 2 + 1, 3);
 	lcd.write(str);
+}
+
+unsigned long miditimertime = 0;
+constexpr unsigned long miditimerBomb = 1000;
+
+void setmiditext(bool set = true)
+{
+	lcd.setCursor(LCD_X - 4, 0);
+	lcd.write(set ? "MIDI" : "    ");
+}
+void resetmiditexttimer()
+{
+	miditimertime = millis() + miditimerBomb;
+	disp::packetincoming = true;
+	setmiditext();
 }
 
 void midicallback(midi::Event event, std::int16_t data)
@@ -243,6 +259,8 @@ void midicallback(midi::Event event, std::int16_t data)
 		}
 		dispout(notes.empty() ? 0 : notes.back(), pitchbend, mod, breath, foot, portamento);
 	}
+
+	resetmiditexttimer();
 }
 
 void setup()
@@ -343,6 +361,10 @@ void loop()
 			//ledcWrite(3, disp::lastport);
 			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot, disp::lastport);
 			iszerotimer = false;
+		}
+		if (disp::packetincoming && (millis() > miditimertime))
+		{
+			setmiditext(false);
 		}
 
 		if (xSemaphoreTake(xSemaphoreEnc, 10) == pdTRUE)
