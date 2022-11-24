@@ -98,38 +98,55 @@ std::string notestr(std::int16_t note)
 
 namespace disp
 {
-	constexpr std::uint8_t numDisplays = 3;
+	constexpr std::uint8_t numDisplays = 6;
 	std::int8_t selidx = 0;
 	bool isSelected = false;
 	constexpr char selchar[4] = { ' ', '>', ' ', '\x7E' };
 
 	std::uint8_t lastnote;
 	std::int16_t lastbend;
-	std::uint8_t lastmod;
+	std::uint8_t lastmod, lastbr, lastfoot, lastport;
 }
 
-void dispout(std::uint8_t note, std::int16_t bend, std::uint8_t mod)
+void dispout(
+	std::uint8_t note, std::int16_t bend, std::uint8_t mod,
+	std::uint8_t breath, std::uint8_t foot, std::uint8_t portamento
+)
 {
 	disp::lastnote = note;
 	disp::lastbend = bend;
 	disp::lastmod  = mod;
+	disp::lastbr   = breath;
+	disp::lastfoot = foot;
+	disp::lastport = portamento;
 
 	//ledcWrite(0, duty);
 	char str[LCD_X];
 
-	sprintf(str, "%cNote: %s",    disp::selchar[(disp::selidx == 0) | (disp::isSelected << 1)], notestr(note).c_str());
-	lcd.setCursor(0, 1);
+	sprintf(str, "%cNote: %s", disp::selchar[(disp::selidx == 0) | (disp::isSelected << 1)], notestr(note).c_str());
+	lcd.setCursor(0, 0);
 	lcd.write(str);
 	
 	const auto bendvalue = float(bend) * (2.f * (1.f / 8192.f));
-	sprintf(str, "%cBend: %c%.2f ", disp::selchar[(disp::selidx == 1) | (disp::isSelected << 1)], bendvalue < 0.0f ? '-' : '+', fabsf(bendvalue));
-	lcd.setCursor(0, 2);
+	sprintf(str, "%cBend:%c%.2f ", disp::selchar[(disp::selidx == 1) | (disp::isSelected << 1)], bendvalue < 0.0f ? '-' : bendvalue > 0.0f ? '+' : ' ', fabsf(bendvalue));
+	lcd.setCursor(0, 1);
 	lcd.write(str);
 	
-	sprintf(str, "%cMod: %hu  ",  disp::selchar[(disp::selidx == 2) | (disp::isSelected << 1)], std::uint16_t(mod));
+	sprintf(str, "%cMod:  %hu  ", disp::selchar[(disp::selidx == 2) | (disp::isSelected << 1)], std::uint16_t(mod));
+	lcd.setCursor(0, 2);
+	lcd.write(str);
+
+	sprintf(str, "%cVCF:  %hu  ", disp::selchar[(disp::selidx == 3) | (disp::isSelected << 1)], std::uint16_t(breath));
 	lcd.setCursor(0, 3);
 	lcd.write(str);
 
+	sprintf(str, "%cLFO1:%hu  ", disp::selchar[(disp::selidx == 4) | (disp::isSelected << 1)], std::uint16_t(foot));
+	lcd.setCursor(LCD_X / 2 + 1, 2);
+	lcd.write(str);
+
+	sprintf(str, "%cLFO2:%hu  ", disp::selchar[(disp::selidx == 5) | (disp::isSelected << 1)], std::uint16_t(portamento));
+	lcd.setCursor(LCD_X / 2 + 1, 3);
+	lcd.write(str);
 }
 
 void midicallback(midi::Event event, std::int16_t data)
@@ -138,7 +155,7 @@ void midicallback(midi::Event event, std::int16_t data)
 	static std::list<std::uint8_t>::iterator noteIters[127];
 	static bool noteExist[127] = { 0 };
 	static std::int16_t pitchbend = 0;
-	static std::uint8_t mod = 0;
+	static std::uint8_t mod = 0, breath = 0, foot = 0, portamento = 0;
 
 	switch (event)
 	{
@@ -157,7 +174,7 @@ void midicallback(midi::Event event, std::int16_t data)
 		noteExist[note] = true;
 		
 		srdac::write(srdac::noteToVal(note, pitchbend));
-		dispout(note, pitchbend, mod);
+		dispout(note, pitchbend, mod, breath, foot, portamento);
 		
 		break;
 	}
@@ -178,7 +195,7 @@ void midicallback(midi::Event event, std::int16_t data)
 		if (!notes.empty())
 		{
 			srdac::write(srdac::noteToVal(notes.back(), pitchbend));
-			dispout(notes.back(), pitchbend, mod);
+			dispout(notes.back(), pitchbend, mod, breath, foot, portamento);
 		}
 		
 		break;
@@ -196,16 +213,32 @@ void midicallback(midi::Event event, std::int16_t data)
 			pitchbend = data;
 
 			srdac::write(srdac::noteToVal(note, pitchbend));
-			dispout(note, pitchbend, mod);
+			dispout(note, pitchbend, mod, breath, foot, portamento);
 		}
 
 		break;
-	case midi::Event::ControlModulation:
-		mod = std::uint8_t(data);
-		Serial.printf("Modulation value: %hd\n", mod);
-		ledcWrite(0, 511U - std::uint32_t(mod) * 4U);
-		dispout(notes.empty() ? 0 : notes.back(), pitchbend, mod);
-		break;
+	default:
+		switch (event)
+		{
+		case midi::Event::ControlModulation:
+			mod = std::uint8_t(data);
+			Serial.printf("Modulation value: %hd\n", mod);
+			ledcWrite(0, mod);
+			break;
+		case midi::Event::ControlBreath:
+			ledcWrite(1, breath);
+			Serial.printf("Breath value: %hd\n", breath);
+			break;
+		case midi::Event::ControlFoot:
+			ledcWrite(2, foot);
+			Serial.printf("Foot value: %hd\n", foot);
+			break;
+		case midi::Event::ControlPortamento:
+			ledcWrite(3, portamento);
+			Serial.printf("Portamento value: %hd\n", portamento);
+			break;
+		}
+		dispout(notes.empty() ? 0 : notes.back(), pitchbend, mod, breath, foot, portamento);
 	}
 }
 
@@ -222,17 +255,17 @@ void setup()
 
 	// Initialize PWM
 	ledcAttachPin(PWM1_OUT, 0);
-	ledcSetup(0, 78000, 9);
-	ledcWrite(0, 511);
+	ledcSetup(0, 78000, 7);
+	ledcWrite(0, 0);
 	ledcAttachPin(PWM2_OUT, 1);
-	ledcSetup(1, 78000, 9);
-	ledcWrite(1, 511);
+	ledcSetup(1, 78000, 7);
+	ledcWrite(1, 0);
 	ledcAttachPin(PWM3_OUT, 2);
-	ledcSetup(2, 78000, 9);
-	ledcWrite(2, 511);
+	ledcSetup(2, 78000, 7);
+	ledcWrite(2, 0);
 	ledcAttachPin(PWM4_OUT, 3);
-	ledcSetup(3, 78000, 9);
-	ledcWrite(3, 511);
+	ledcSetup(3, 78000, 7);
+	ledcWrite(3, 0);
 
 	srdac::initDac(SR_SER, SR_CLK, SR_RCLK);
 
@@ -251,8 +284,16 @@ void setup()
 
 	Serial.println("Everything initialized!");
 	lcd.setCursor(0, 0);
-	lcd.write("  Enceladus Synth  ");
-	dispout(0, 0, 0);
+	lcd.write("    Enceladus 080   ");
+	lcd.setCursor(0, 1);
+	lcd.write("     ...DODGY...    ");
+	lcd.setCursor(0, 2);
+	lcd.write("     Version 1.0    ");
+
+	delay(3000);
+	lcd.clear();
+
+	dispout(0, 0, 0, 0, 0, 0);
 }
 
 constexpr std::uint16_t dutylimit = 96;
@@ -274,6 +315,13 @@ constexpr T clamp(T value, T min, T max)
 	return (value < min) ? min : ((value > max) ? max : value);
 }
 
+void scroll7bit(std::uint8_t & bit7, const std::int16_t delta)
+{
+	const auto tempmod = std::int16_t(bit7) + 5 * delta;
+	bit7 = std::uint8_t(clamp(tempmod, 0, 127));
+	setzerotimer();
+}
+
 void loop()
 {
 	while (1)
@@ -282,8 +330,15 @@ void loop()
 		{
 			disp::lastbend = 0;
 			disp::lastmod  = 0;
+			//disp::lastbr   = 0;
+			//disp::lastfoot = 0;
+			//disp::lastport = 0;
 			srdac::write(srdac::noteToVal(disp::lastnote, disp::lastbend));
-			dispout(disp::lastnote, disp::lastbend, disp::lastmod);
+			ledcWrite(0, disp::lastmod);
+			//ledcWrite(1, disp::lastbr);
+			//ledcWrite(2, disp::lastfoot);
+			//ledcWrite(3, disp::lastport);
+			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot, disp::lastport);
 			iszerotimer = false;
 		}
 
@@ -310,12 +365,17 @@ void loop()
 					break;
 				}
 				case 2:
-				{
-					const auto tempmod = std::int16_t(disp::lastmod) + 10 * delta;
-					disp::lastmod = std::uint8_t(clamp(tempmod, 0, 127));
-					setzerotimer();
+					scroll7bit(disp::lastmod, delta);
 					break;
-				}
+				case 3:
+					scroll7bit(disp::lastbr, delta);
+					break;
+				case 4:
+					scroll7bit(disp::lastfoot, delta);
+					break;
+				case 5:
+					scroll7bit(disp::lastport, delta);
+					break;
 				default:
 					Serial.println("Unknown display index!");
 				}
@@ -327,14 +387,14 @@ void loop()
 				disp::selidx = (newidx < 0) ? (disp::numDisplays - 1) : ((newidx >= disp::numDisplays) ? 0 : newidx);
 			}
 			srdac::write(srdac::noteToVal(disp::lastnote, disp::lastbend));
-			dispout(disp::lastnote, disp::lastbend, disp::lastmod);
+			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot, disp::lastport);
 		}
 		else if (xSemaphoreTake(xSemaphoreBtn, 10) == pdTRUE)
 		{
 			encBtnUsed = false;
 
 			disp::isSelected ^= encBtnDown;
-			dispout(disp::lastnote, disp::lastbend, disp::lastmod);
+			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot, disp::lastport);
 		}
 		else
 		{

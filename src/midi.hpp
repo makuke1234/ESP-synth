@@ -12,6 +12,9 @@ namespace midi
 
 		ControlUnknown,
 		ControlModulation,
+		ControlBreath,
+		ControlFoot,
+		ControlPortamento,
 		
 		PitchBend,
 	};

@@ -48,6 +48,15 @@ bool midi::parseEvent(const std::uint8_t * packet)
 		case 0x01:
 			ev = Event::ControlModulation;
 			break;
+		case 0x02:
+			ev = Event::ControlBreath;
+			break;
+		case 0x04:
+			ev = Event::ControlFoot;
+			break;
+		case 0x05:
+			ev = Event::ControlPortamento;
+			break;
 		default:
 			ev = Event::ControlUnknown;
 		}
