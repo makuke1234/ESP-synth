@@ -132,19 +132,19 @@ void dispout(
 	lcd.setCursor(0, 1);
 	lcd.write(str);
 	
-	sprintf(str, "%cMod:  %hu  ", disp::selchar[(disp::selidx == 2) | (disp::isSelected << 1)], std::uint16_t(mod));
+	sprintf(str, "%cMod:  %3hu", disp::selchar[(disp::selidx == 2) | (disp::isSelected << 1)], std::uint16_t(mod));
 	lcd.setCursor(0, 2);
 	lcd.write(str);
 
-	sprintf(str, "%cVCF:  %hu  ", disp::selchar[(disp::selidx == 3) | (disp::isSelected << 1)], std::uint16_t(breath));
+	sprintf(str, "%cVCF:  %3hu", disp::selchar[(disp::selidx == 3) | (disp::isSelected << 1)], std::uint16_t(breath));
 	lcd.setCursor(0, 3);
 	lcd.write(str);
 
-	sprintf(str, "%cLFO1:%hu  ", disp::selchar[(disp::selidx == 4) | (disp::isSelected << 1)], std::uint16_t(foot));
+	sprintf(str, "%cLFO1:%3hu", disp::selchar[(disp::selidx == 4) | (disp::isSelected << 1)], std::uint16_t(foot));
 	lcd.setCursor(LCD_X / 2 + 1, 2);
 	lcd.write(str);
 
-	sprintf(str, "%cLFO2:%hu  ", disp::selchar[(disp::selidx == 5) | (disp::isSelected << 1)], std::uint16_t(portamento));
+	sprintf(str, "%cLFO2:%3hu", disp::selchar[(disp::selidx == 5) | (disp::isSelected << 1)], std::uint16_t(portamento));
 	lcd.setCursor(LCD_X / 2 + 1, 3);
 	lcd.write(str);
 }
@@ -226,14 +226,17 @@ void midicallback(midi::Event event, std::int16_t data)
 			ledcWrite(0, mod);
 			break;
 		case midi::Event::ControlBreath:
+			breath = std::uint8_t(data);
 			ledcWrite(1, breath);
 			Serial.printf("Breath value: %hd\n", breath);
 			break;
 		case midi::Event::ControlFoot:
+			foot = std::uint8_t(data);
 			ledcWrite(2, foot);
 			Serial.printf("Foot value: %hd\n", foot);
 			break;
 		case midi::Event::ControlPortamento:
+			portamento = std::uint8_t(data);
 			ledcWrite(3, portamento);
 			Serial.printf("Portamento value: %hd\n", portamento);
 			break;
