@@ -31,6 +31,8 @@ bool midi::parseEvent(const std::uint8_t * packet)
 	Event ev;
 	std::int16_t data;
 
+	Serial.printf("midi packet %08X\n", *reinterpret_cast<const std::uint32_t *>(packet));
+
 	switch (packet[0] & 0x0F)
 	{
 	case 0x8:	// Note off
