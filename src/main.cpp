@@ -22,7 +22,7 @@
 #define PWM4_OUT 36
 
 #define GATE_CHANNEL  1
-#define GATE_LEVEL   63
+#define GATE_LEVEL   65
 
 #define SR_SER  16
 #define SR_CLK  15
@@ -110,6 +110,8 @@ namespace disp
 	std::int16_t lastbend;
 	std::uint8_t lastmod, lastbr, lastfoot;
 	volatile bool packetincoming = false;
+
+	bool gate = false;
 }
 
 void dispout(
@@ -145,6 +147,10 @@ void dispout(
 
 	sprintf(str, "%cLFO1:%3hu", disp::selchar[(disp::selidx == 4) | (disp::isSelected << 1)], std::uint16_t(foot));
 	lcd.setCursor(LCD_X / 2 + 1, 2);
+	lcd.write(str);
+
+	sprintf(str, "%cGATE:%3hu", disp::selchar[(disp::selidx == 5) | (disp::isSelected << 1)], std::uint16_t(disp::gate));
+	lcd.setCursor(LCD_X / 2 + 1, 3);
 	lcd.write(str);
 }
 
@@ -189,6 +195,7 @@ void midicallback(midi::Event event, std::int16_t data)
 		
 		srdac::write(srdac::noteToVal(note, pitchbend));
 		ledcWrite(GATE_CHANNEL, GATE_LEVEL);
+		disp::gate = true;
 		dispout(note, pitchbend, mod, breath, foot);
 		
 		break;
@@ -211,11 +218,13 @@ void midicallback(midi::Event event, std::int16_t data)
 		{
 			srdac::write(srdac::noteToVal(notes.back(), pitchbend));
 			ledcWrite(GATE_CHANNEL, GATE_LEVEL);
+			disp::gate = true;
 			dispout(notes.back(), pitchbend, mod, breath, foot);
 		}
 		else
 		{
 			ledcWrite(GATE_CHANNEL, 0);
+			disp::gate = false;
 		}
 		
 		break;
@@ -336,6 +345,12 @@ constexpr T clamp(T value, T min, T max)
 	return (value < min) ? min : ((value > max) ? max : value);
 }
 
+void scroll1bit(bool & bit1, const std::int16_t delta)
+{
+	const auto tempmod = std::int16_t(bit1) + delta;
+	bit1 = bool(clamp(tempmod, 0, 1));
+	setzerotimer();
+}
 void scroll7bit(std::uint8_t & bit7, const std::int16_t delta)
 {
 	const auto tempmod = std::int16_t(bit7) + 5 * delta;
@@ -396,6 +411,9 @@ void loop()
 				case 4:
 					scroll7bit(disp::lastfoot, delta);
 					break;
+				case 5:
+					scroll1bit(disp::gate, delta);
+					break;
 				default:
 					Serial.println("Unknown display index!");
 				}
@@ -408,6 +426,8 @@ void loop()
 			}
 			srdac::write(srdac::noteToVal(disp::lastnote, disp::lastbend));
 			ledcWrite(0, disp::lastmod);
+			ledcWrite(GATE_CHANNEL, GATE_LEVEL);
+			disp::gate = true;
 			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot);
 		}
 		else if (xSemaphoreTake(xSemaphoreBtn, 10) == pdTRUE)
