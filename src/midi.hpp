@@ -14,7 +14,6 @@ namespace midi
 		ControlModulation,
 		ControlBreath,
 		ControlFoot,
-		ControlPortamento,
 		
 		PitchBend,
 	};

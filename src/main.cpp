@@ -21,6 +21,9 @@
 #define PWM3_OUT 35
 #define PWM4_OUT 36
 
+#define GATE_CHANNEL  1
+#define GATE_LEVEL   63
+
 #define SR_SER  16
 #define SR_CLK  15
 #define SR_RCLK 14
@@ -93,7 +96,7 @@ void IRAM_ATTR encoderBtnISR()
 
 std::string notestr(std::int16_t note)
 {
-	return { "CCDDEFFGGAAB"[char(note % 12)], " # #  # # # "[char(note % 12)], char(note / 12) + '0' };
+	return { "CCDDEFFGGAAB"[char(note % 12)], " # #  # # # "[char(note % 12)], char((note / 12) + '0') };
 }
 
 namespace disp
@@ -105,13 +108,13 @@ namespace disp
 
 	std::uint8_t lastnote;
 	std::int16_t lastbend;
-	std::uint8_t lastmod, lastbr, lastfoot, lastport;
+	std::uint8_t lastmod, lastbr, lastfoot;
 	volatile bool packetincoming = false;
 }
 
 void dispout(
 	std::uint8_t note, std::int16_t bend, std::uint8_t mod,
-	std::uint8_t breath, std::uint8_t foot, std::uint8_t portamento
+	std::uint8_t breath, std::uint8_t foot
 )
 {
 	disp::lastnote = note;
@@ -119,7 +122,6 @@ void dispout(
 	disp::lastmod  = mod;
 	disp::lastbr   = breath;
 	disp::lastfoot = foot;
-	disp::lastport = portamento;
 
 	//ledcWrite(0, duty);
 	char str[LCD_X];
@@ -144,10 +146,6 @@ void dispout(
 	sprintf(str, "%cLFO1:%3hu", disp::selchar[(disp::selidx == 4) | (disp::isSelected << 1)], std::uint16_t(foot));
 	lcd.setCursor(LCD_X / 2 + 1, 2);
 	lcd.write(str);
-
-	sprintf(str, "%cLFO2:%3hu", disp::selchar[(disp::selidx == 5) | (disp::isSelected << 1)], std::uint16_t(portamento));
-	lcd.setCursor(LCD_X / 2 + 1, 3);
-	lcd.write(str);
 }
 
 unsigned long miditimertime = 0;
@@ -171,7 +169,7 @@ void midicallback(midi::Event event, std::int16_t data)
 	static std::list<std::uint8_t>::iterator noteIters[127];
 	static bool noteExist[127] = { 0 };
 	static std::int16_t pitchbend = 0;
-	static std::uint8_t mod = 0, breath = 0, foot = 0, portamento = 0;
+	static std::uint8_t mod = 0, breath = 0, foot = 0;
 
 	switch (event)
 	{
@@ -190,7 +188,8 @@ void midicallback(midi::Event event, std::int16_t data)
 		noteExist[note] = true;
 		
 		srdac::write(srdac::noteToVal(note, pitchbend));
-		dispout(note, pitchbend, mod, breath, foot, portamento);
+		ledcWrite(GATE_CHANNEL, GATE_LEVEL);
+		dispout(note, pitchbend, mod, breath, foot);
 		
 		break;
 	}
@@ -211,7 +210,12 @@ void midicallback(midi::Event event, std::int16_t data)
 		if (!notes.empty())
 		{
 			srdac::write(srdac::noteToVal(notes.back(), pitchbend));
-			dispout(notes.back(), pitchbend, mod, breath, foot, portamento);
+			ledcWrite(GATE_CHANNEL, GATE_LEVEL);
+			dispout(notes.back(), pitchbend, mod, breath, foot);
+		}
+		else
+		{
+			ledcWrite(GATE_CHANNEL, 0);
 		}
 		
 		break;
@@ -229,7 +233,7 @@ void midicallback(midi::Event event, std::int16_t data)
 			pitchbend = data;
 
 			srdac::write(srdac::noteToVal(note, pitchbend));
-			dispout(note, pitchbend, mod, breath, foot, portamento);
+			dispout(note, pitchbend, mod, breath, foot);
 		}
 
 		break;
@@ -243,21 +247,16 @@ void midicallback(midi::Event event, std::int16_t data)
 			break;
 		case midi::Event::ControlBreath:
 			breath = std::uint8_t(data);
-			ledcWrite(1, breath);
+			ledcWrite(2, breath);
 			Serial.printf("Breath value: %hd\n", breath);
 			break;
 		case midi::Event::ControlFoot:
 			foot = std::uint8_t(data);
-			ledcWrite(2, foot);
+			ledcWrite(3, foot);
 			Serial.printf("Foot value: %hd\n", foot);
 			break;
-		case midi::Event::ControlPortamento:
-			portamento = std::uint8_t(data);
-			ledcWrite(3, portamento);
-			Serial.printf("Portamento value: %hd\n", portamento);
-			break;
 		}
-		dispout(notes.empty() ? 0 : notes.back(), pitchbend, mod, breath, foot, portamento);
+		dispout(notes.empty() ? 0 : notes.back(), pitchbend, mod, breath, foot);
 	}
 
 	resetmiditexttimer();
@@ -289,6 +288,7 @@ void setup()
 	ledcWrite(3, 0);
 
 	srdac::initDac(SR_SER, SR_CLK, SR_RCLK);
+	srdac::write(0);
 
 	if (!midi::begin(&midicallback))
 	{
@@ -314,7 +314,7 @@ void setup()
 	delay(3000);
 	lcd.clear();
 
-	dispout(0, 0, 0, 0, 0, 0);
+	dispout(0, 0, 0, 0, 0);
 }
 
 constexpr std::uint16_t dutylimit = 96;
@@ -353,13 +353,11 @@ void loop()
 			disp::lastmod  = 0;
 			//disp::lastbr   = 0;
 			//disp::lastfoot = 0;
-			//disp::lastport = 0;
 			srdac::write(srdac::noteToVal(disp::lastnote, disp::lastbend));
 			ledcWrite(0, disp::lastmod);
-			//ledcWrite(1, disp::lastbr);
-			//ledcWrite(2, disp::lastfoot);
-			//ledcWrite(3, disp::lastport);
-			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot, disp::lastport);
+			//ledcWrite(2, disp::lastbr);
+			//ledcWrite(3, disp::lastfoot);
+			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot);
 			iszerotimer = false;
 		}
 		if (disp::packetincoming && (millis() > miditimertime))
@@ -398,9 +396,6 @@ void loop()
 				case 4:
 					scroll7bit(disp::lastfoot, delta);
 					break;
-				case 5:
-					scroll7bit(disp::lastport, delta);
-					break;
 				default:
 					Serial.println("Unknown display index!");
 				}
@@ -412,14 +407,15 @@ void loop()
 				disp::selidx = (newidx < 0) ? (disp::numDisplays - 1) : ((newidx >= disp::numDisplays) ? 0 : newidx);
 			}
 			srdac::write(srdac::noteToVal(disp::lastnote, disp::lastbend));
-			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot, disp::lastport);
+			ledcWrite(0, disp::lastmod);
+			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot);
 		}
 		else if (xSemaphoreTake(xSemaphoreBtn, 10) == pdTRUE)
 		{
 			encBtnUsed = false;
 
 			disp::isSelected ^= encBtnDown;
-			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot, disp::lastport);
+			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot);
 		}
 		else
 		{
