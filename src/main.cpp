@@ -225,6 +225,7 @@ void midicallback(midi::Event event, std::int16_t data)
 		{
 			ledcWrite(GATE_CHANNEL, 0);
 			disp::gate = false;
+			dispout(note, pitchbend, mod, breath, foot);
 		}
 		
 		break;
@@ -385,6 +386,7 @@ void loop()
 			encUsed = false;
 
 			const std::int16_t delta = (encDirection == encDirection::left) ? -1 : +1;
+			bool changegate = false;
 			if (disp::isSelected)
 			{
 				switch (disp::selidx)
@@ -413,6 +415,7 @@ void loop()
 					break;
 				case 5:
 					scroll1bit(disp::gate, delta);
+					changegate = true;
 					break;
 				default:
 					Serial.println("Unknown display index!");
@@ -426,8 +429,7 @@ void loop()
 			}
 			srdac::write(srdac::noteToVal(disp::lastnote, disp::lastbend));
 			ledcWrite(0, disp::lastmod);
-			ledcWrite(GATE_CHANNEL, GATE_LEVEL);
-			disp::gate = true;
+			ledcWrite(GATE_CHANNEL, changegate && !disp::gate ? 0 : GATE_LEVEL);
 			dispout(disp::lastnote, disp::lastbend, disp::lastmod, disp::lastbr, disp::lastfoot);
 		}
 		else if (xSemaphoreTake(xSemaphoreBtn, 10) == pdTRUE)
